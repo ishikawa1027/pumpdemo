@@ -1,13 +1,15 @@
 $(function() {
 	// コントローラの元となるオブジェクトを作成
 	var shakeController = {
-		_SHAKEINTERVAL : 200,
+		_SHAKEINTERVAL : 300,
+		_maxAc : 0,
 		_lastShakedTimeMillis : 0,
+
 		_isMoving : false,
 		_startMovingThreshold : 10.0,
 		_stopMovingThreshold : 6.0,
 
-		__name : 'pump.ShakeController',
+		__name : 'pump.controller.ShakeController',
 		__construct : function() {
 			this.log.info('{0}を実行', '__construct');
 		},
@@ -17,30 +19,41 @@ $(function() {
 		__ready : function() {
 			this.log.info('{0}を実行', '__ready');
 		},
+		'#pumpPicContainer click' : function(context, $el){
+			this.trigger('shake', {maxAc : 10});
+		},
 		'{window} devicemotion' : function(context, $el) {
 			context.event.preventDefault();
 			var currentTimeMillis = new Date().getTime();
 
 			// 直前のshakeから一定時間経っていなければ終了
-			if(currentTimeMillis - this._lastShakedTimeMillis < this._SHAKEINTERVAL){
+			if (currentTimeMillis - this._lastShakedTimeMillis < this._SHAKEINTERVAL) {
 				return;
 			}
 
+			// （重力加速度を除外した）加速度を取得する
 			var ac = context.event.originalEvent.acceleration;
+
+			// 加速度の最大値を更新
+			if (ac.y > this._maxAc) {
+				this._maxAc = ac.y;
+			}
+
 			this.log.debug('加速度 x:{0}, y:{1}, z:{2}', ac.x, ac.y, ac.z);
-			if (Math.abs(ac.y) > this._startMovingThreshold) {
+			if (!this._isMoving && ac.y > this._startMovingThreshold) {
 				this._isMoving = true;
 			}
-			if (this._isMoving && Math.abs(ac.x) < this._stopMovingThreshold) {
+			if (this._isMoving && ac.y < this._stopMovingThreshold) {
+				this.trigger('shake', {
+					maxAc : this._maxAc
+				});
 				this._isMoving = false;
-				// alert('shakin!');
-				this.$find('#debugWindow').append("shakin!<br>");
+				this._maxAc = 0;
 				this._lastShakedTimeMillis = currentTimeMillis;
-				this.trigger('shake');
 			}
 		}
 	};
 
-	// id="container"である要素にコントローラをバインド
-	h5.core.controller('#container', shakeController);
+	// shakeControllerをグローバルに公開
+	h5.core.expose(shakeController);
 });
